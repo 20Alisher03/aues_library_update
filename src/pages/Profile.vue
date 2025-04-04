@@ -1,67 +1,218 @@
+<script setup>
+import { ref, onMounted, computed } from 'vue'
+import { message } from 'ant-design-vue'
+import axios from 'axios'
+import { useRouter } from 'vue-router'
+import { useLanguageStore } from '@/language' // Импортируем useLanguageStore
+
+const router = useRouter()
+const profileData = ref({
+  id: null,
+  username: '',
+  firstName: '',
+  lastName: '',
+  middleName: '',
+  birthDate: '',
+  phone: '',
+  email: ''
+})
+const loading = ref(true)
+const updating = ref(false)
+
+// Получаем хранилище языка
+const languageStore = useLanguageStore()
+
+// Реактивный метод для получения переводов
+const $t = computed(() => (key) => {
+  const translation = languageStore.translations[key] || key
+  console.log(`Translating key "${key}":`, translation) // Логирование для отладки
+  return translation
+})
+
+const loadUserProfile = async () => {
+  try {
+    const userId = localStorage.getItem('userId')
+    console.log('ID пользователя из localStorage:', userId)
+
+    if (!userId) {
+      message.error($t.value('profile.error_not_authorized'))
+      router.push('/login')
+      return
+    }
+
+    const numericUserId = parseInt(userId, 10)
+    if (isNaN(numericUserId)) {
+      message.error($t.value('profile.invalid_user_id'))
+      localStorage.removeItem('userId')
+      localStorage.removeItem('isAuthenticated')
+      localStorage.removeItem('userData')
+      router.push('/login')
+      return
+    }
+
+    // Сначала пробуем загрузить из localStorage
+    const savedUserData = localStorage.getItem('userData')
+    if (savedUserData) {
+      profileData.value = JSON.parse(savedUserData)
+    }
+
+    loading.value = true
+    console.log('Отправляем запрос на:', `http://localhost:8080/api/profile/${numericUserId}`)
+    const response = await axios.get(`http://localhost:8080/api/profile/${numericUserId}`)
+    console.log('Полученные данные:', response.data)
+
+    profileData.value = {
+      id: response.data.id,
+      username: response.data.username || '',
+      firstName: response.data.firstName || '',
+      lastName: response.data.lastName || '',
+      middleName: response.data.middleName || '',
+      birthDate: response.data.birthDate || '',
+      phone: response.data.phone || '',
+      email: response.data.email || ''
+    }
+    // Обновляем данные в localStorage
+    localStorage.setItem('userData', JSON.stringify(profileData.value))
+  } catch (error) {
+    console.error('Полная ошибка:', error)
+    console.error('Ответ сервера:', error.response)
+    if (error.response?.status === 401) {
+      message.error($t.value('profile.error_not_authorized'))
+      router.push('/login')
+    } else if (error.response?.status === 400) {
+      message.error($t.value('profile.invalid_user_data'))
+      localStorage.removeItem('userId')
+      localStorage.removeItem('isAuthenticated')
+      localStorage.removeItem('userData')
+      router.push('/login')
+    } else {
+      message.error(
+        $t.value('profile.error_loading') + (error.response?.data?.message || error.message)
+      )
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+const updateProfile = async () => {
+  try {
+    const userId = localStorage.getItem('userId')
+    if (!userId) {
+      message.error($t.value('profile.error_not_authorized'))
+      router.push('/login')
+      return
+    }
+
+    const numericUserId = parseInt(userId, 10)
+    if (isNaN(numericUserId)) {
+      message.error($t.value('profile.invalid_user_id'))
+      localStorage.removeItem('userId')
+      localStorage.removeItem('isAuthenticated')
+      localStorage.removeItem('userData')
+      router.push('/login')
+      return
+    }
+
+    updating.value = true
+    await axios.put(`http://localhost:8080/api/profile/${numericUserId}`, {
+      firstName: profileData.value.firstName,
+      lastName: profileData.value.lastName,
+      middleName: profileData.value.middleName,
+      phone: profileData.value.phone,
+      email: profileData.value.email,
+      birthDate: profileData.value.birthDate
+    })
+    message.success($t.value('profile.update_success'))
+    localStorage.setItem('userData', JSON.stringify(profileData.value))
+  } catch (error) {
+    console.error('Ошибка при обновлении профиля:', error)
+    if (error.response?.status === 401) {
+      message.error($t.value('profile.error_not_authorized'))
+      router.push('/login')
+    } else if (error.response?.status === 400) {
+      message.error(
+        $t.value('profile.invalid_profile_data') + (error.response?.data?.message || error.message)
+      )
+    } else {
+      message.error(
+        $t.value('profile.error_updating') + (error.response?.data?.message || error.message)
+      )
+    }
+  } finally {
+    updating.value = false
+  }
+}
+
+onMounted(() => {
+  loadUserProfile()
+})
+</script>
+
 <template>
   <div class="profile-container">
-    <h2 class="text-3xl font-bold mb-8">Мой Профиль</h2>
-    <h3 class="text-xl">Персональные данные</h3>
+    <h2 class="text-3xl font-bold mb-8">{{ $t('profile.title') }}</h2>
+    <h3 class="text-xl">{{ $t('profile.personal_data') }}</h3>
 
-    <div v-if="loading" class="text-center py-8">Загрузка данных...</div>
+    <div v-if="loading" class="text-center py-8">{{ $t('profile.loading') }}</div>
 
     <div v-else>
       <div class="grid grid-cols-3 gap-10 mt-10">
         <div class="flex flex-col">
-          <label class="mb-2">Имя</label>
+          <label class="mb-2">{{ $t('profile.first_name') }}</label>
           <input
-            v-model="profileData.first_name"
-            placeholder="Имя"
+            v-model="profileData.firstName"
+            :placeholder="$t('profile.first_name_placeholder')"
             type="text"
             class="p-2 border rounded"
           />
         </div>
 
         <div class="flex flex-col">
-          <label class="mb-2">Фамилия</label>
+          <label class="mb-2">{{ $t('profile.last_name') }}</label>
           <input
-            v-model="profileData.last_name"
-            placeholder="Фамилия"
+            v-model="profileData.lastName"
+            :placeholder="$t('profile.last_name_placeholder')"
             type="text"
             class="p-2 border rounded"
           />
         </div>
 
         <div class="flex flex-col">
-          <label class="mb-2">Отчество</label>
+          <label class="mb-2">{{ $t('profile.middle_name') }}</label>
           <input
-            v-model="profileData.middle_name"
-            placeholder="Отчество"
+            v-model="profileData.middleName"
+            :placeholder="$t('profile.middle_name_placeholder')"
             type="text"
             class="p-2 border rounded"
           />
         </div>
 
         <div class="flex flex-col">
-          <label class="mb-2">Дата рождения</label>
+          <label class="mb-2">{{ $t('profile.birth_date') }}</label>
           <input
-            v-model="profileData.birth_date"
-            placeholder="Дата рождения"
+            v-model="profileData.birthDate"
+            :placeholder="$t('profile.birth_date_placeholder')"
             type="date"
             class="p-2 border rounded"
           />
         </div>
 
         <div class="flex flex-col">
-          <label class="mb-2">Телефон</label>
+          <label class="mb-2">{{ $t('profile.phone') }}</label>
           <input
             v-model="profileData.phone"
-            placeholder="Телефон"
+            :placeholder="$t('profile.phone_placeholder')"
             type="text"
             class="p-2 border rounded"
           />
         </div>
 
         <div class="flex flex-col">
-          <label class="mb-2">Email</label>
+          <label class="mb-2">{{ $t('profile.email') }}</label>
           <input
             v-model="profileData.email"
-            placeholder="Email"
+            :placeholder="$t('profile.email_placeholder')"
             type="email"
             class="p-2 border rounded"
           />
@@ -74,111 +225,12 @@
           :disabled="updating"
           class="px-4 py-2 bg-blue-500 text-white rounded mr-4 disabled:opacity-50"
         >
-          {{ updating ? 'Сохранение...' : 'Сохранить изменения' }}
+          {{ updating ? $t('profile.saving') : $t('profile.save_changes') }}
         </button>
       </div>
     </div>
   </div>
 </template>
-
-<script>
-import { ref, onMounted } from 'vue'
-import { message } from 'ant-design-vue'
-import axios from 'axios'
-import { useRouter } from 'vue-router'
-
-export default {
-  setup() {
-    const router = useRouter()
-    const profileData = ref({
-      first_name: '',
-      last_name: '',
-      middle_name: '',
-      birth_date: '',
-      phone: '',
-      email: ''
-    })
-    const loading = ref(true)
-    const updating = ref(false)
-
-    const loadUserProfile = async () => {
-      try {
-        const userId = localStorage.getItem('userId')
-        console.log('ID пользователя из localStorage:', userId)
-
-        if (!userId) {
-          message.error('Необходима авторизация')
-          router.push('/login')
-          return
-        }
-
-        // Сначала пробуем загрузить из localStorage
-        const savedUserData = localStorage.getItem('userData')
-        if (savedUserData) {
-          profileData.value = JSON.parse(savedUserData)
-        }
-
-        loading.value = true
-        console.log('Отправляем запрос на:', `http://localhost:5000/api/profile/${userId}`)
-        const response = await axios.get(`http://localhost:5000/api/profile/${userId}`)
-        console.log('Полученные данные:', response.data)
-
-        profileData.value = response.data
-        // Обновляем данные в localStorage
-        localStorage.setItem('userData', JSON.stringify(response.data))
-      } catch (error) {
-        console.error('Полная ошибка:', error)
-        console.error('Ответ сервера:', error.response)
-        if (error.response?.status === 401) {
-          message.error('Необходима авторизация')
-          router.push('/login')
-        } else {
-          message.error('Не удалось загрузить данные профиля')
-        }
-      } finally {
-        loading.value = false
-      }
-    }
-
-    const updateProfile = async () => {
-      try {
-        const userId = localStorage.getItem('userId')
-        if (!userId) {
-          message.error('Необходима авторизация')
-          router.push('/login')
-          return
-        }
-
-        updating.value = true
-        await axios.put(`http://localhost:5000/api/profile/${userId}`, profileData.value)
-        message.success('Профиль успешно обновлен')
-        localStorage.setItem('userData', JSON.stringify(profileData.value))
-      } catch (error) {
-        console.error('Ошибка при обновлении профиля:', error)
-        if (error.response?.status === 401) {
-          message.error('Необходима авторизация')
-          router.push('/login')
-        } else {
-          message.error('Не удалось обновить профиль')
-        }
-      } finally {
-        updating.value = false
-      }
-    }
-
-    onMounted(() => {
-      loadUserProfile()
-    })
-
-    return {
-      profileData,
-      loading,
-      updating,
-      updateProfile
-    }
-  }
-}
-</script>
 
 <style lang="scss">
 // Responsive breakpoints

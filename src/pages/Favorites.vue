@@ -1,30 +1,52 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { LeftCircleOutlined, RightCircleOutlined } from '@ant-design/icons-vue'
 import api from '../Axios'
+import { useLanguageStore } from '@/language'
 
 const favorites = ref([])
 const loading = ref(true)
+const languageStore = useLanguageStore()
+
+// Динамически получаем userId из localStorage
+const userId = ref(localStorage.getItem('userId') || null)
+
+if (!userId.value) {
+  console.error(
+    languageStore.translations['favorites.error_not_authorized'] ||
+      'Пользователь не авторизован. Пожалуйста, войдите в систему.'
+  )
+}
 
 onMounted(async () => {
   try {
-    const { data } = await api.get('/favorites?_relations=books')
-    favorites.value = data.map((obj) => obj.book)
+    if (!userId.value) {
+      throw new Error(
+        languageStore.translations['favorites.error_not_authorized'] ||
+          'Пользователь не авторизован'
+      )
+    }
+    const { data } = await api.get(`/favorites/${userId.value}`)
+    favorites.value = data
     loading.value = false
   } catch (err) {
     console.log(err)
     loading.value = false
   }
 })
+
+// Метод для получения переводов
+const $t = (key) => {
+  return languageStore.translations[key] || key
+}
 </script>
 
 <template>
   <div class="favorites-container">
-    <h2 class="text-3xl font-bold mb-8">Мои Избранные</h2>
+    <h2 class="text-3xl font-bold mb-8">{{ $t('favorites.title') }}</h2>
 
-    <div v-if="loading" class="text-center py-10">Загрузка избранных книг...</div>
+    <div v-if="loading" class="text-center py-10">{{ $t('favorites.loading') }}</div>
 
-    <div v-else-if="!favorites.length" class="text-center py-10">У вас пока нет избранных книг</div>
+    <div v-else-if="!favorites.length" class="text-center py-10">{{ $t('favorites.empty') }}</div>
 
     <div v-else class="carousel-wrapper">
       <a-carousel arrows>
@@ -64,15 +86,16 @@ onMounted(async () => {
   margin: 0 auto;
 }
 
-/* Carousel Slides */
 :deep(.slick-slide) {
   text-align: center;
-  height: 350px;
+  height: 300px;
   background: #fff;
   padding: 15px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
-/* Navigation Arrows */
 :deep(.slick-arrow.custom-slick-arrow) {
   width: 30px;
   height: 30px;
@@ -94,7 +117,6 @@ onMounted(async () => {
   background-color: #fff;
 }
 
-/* Book Card Styling */
 .book-card {
   position: relative;
   padding: 15px;
@@ -128,9 +150,5 @@ onMounted(async () => {
   color: black;
   margin-bottom: 8px;
   text-align: center;
-}
-
-.rating {
-  margin-top: -15px;
 }
 </style>

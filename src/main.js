@@ -1,8 +1,9 @@
-// main.js
+// В файле main.js
 import './assets/main.css'
 import { createApp } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import { autoAnimatePlugin } from '@formkit/auto-animate/vue'
+import { createPinia } from 'pinia'
 import Antd from 'ant-design-vue'
 import 'ant-design-vue/dist/reset.css'
 
@@ -12,8 +13,15 @@ import Login from './pages/Authorization.vue'
 import Favorites from './pages/Favorites.vue'
 import Profile from './pages/Profile.vue'
 import Downloads from './pages/Downloads.vue'
+import FaqBot from './pages/Faq.vue'
+import AdminPanel from './pages/AdminPanel.vue' // Новый импорт
+
+import { useLanguageStore } from './language'
 
 const app = createApp(App)
+
+const pinia = createPinia()
+app.use(pinia)
 
 const routes = [
   {
@@ -45,6 +53,18 @@ const routes = [
     name: 'Profile',
     component: Profile,
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/faq',
+    name: 'Faq',
+    component: FaqBot,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/admin',
+    name: 'AdminPanel',
+    component: AdminPanel,
+    meta: { requiresAuth: true, requiresAdmin: true } // Добавляем метаданные для админов
   }
 ]
 
@@ -53,30 +73,32 @@ const router = createRouter({
   routes
 })
 
-// Navigation guard с улучшенной логикой
 router.beforeEach((to, from, next) => {
   const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true'
+  const role = localStorage.getItem('role') || 'USER'
 
-  // Если путь требует авторизации и пользователь не авторизован
   if (to.meta.requiresAuth && !isAuthenticated) {
     next('/autorization')
-  }
-  // Если пользователь пытается попасть на страницу логина будучи авторизованным
-  else if (to.path === '/autorization' && isAuthenticated) {
+  } else if (to.path === '/autorization' && isAuthenticated) {
+    next(role === 'ADMIN' ? '/admin' : '/')
+  } else if (to.meta.requiresAdmin && role !== 'ADMIN') {
     next('/')
-  }
-  // Если это корневой путь '/' и пользователь не авторизован
-  else if (to.path === '/' && !isAuthenticated) {
+  } else if (to.path === '/' && !isAuthenticated) {
     next('/autorization')
-  }
-  // Во всех остальных случаях разрешаем переход
-  else {
+  } else {
     next()
   }
+})
+
+const languageStore = useLanguageStore(pinia)
+languageStore.setLanguage(localStorage.getItem('language') || 'ru').then(() => {
+  console.log('Initial language set:', languageStore.currentLanguage)
+  console.log('Initial translations:', languageStore.translations)
 })
 
 app.use(router)
 app.use(autoAnimatePlugin)
 app.use(Antd)
+app.use(pinia)
 
 app.mount('#app')

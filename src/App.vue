@@ -16,10 +16,12 @@ const filters = ref({
 
 const toggleFilters = () => {
   showFilters.value = !showFilters.value
+  console.log('ТoggleFilters вызван, showFilters:', showFilters.value)
 }
 
 const updateFilters = (newFilters) => {
-  filters.value = { ...newFilters }
+  filters.value = { ...filters.value, ...newFilters }
+  console.log('Фильтры обновлены:', filters.value)
 }
 
 provide('filters', filters)

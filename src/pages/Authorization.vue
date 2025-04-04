@@ -1,123 +1,23 @@
-<template>
-  <div class="login-container">
-    <div class="login-card">
-      <a-form
-        :model="formState"
-        name="normal_login"
-        class="login-form"
-        @finish="onFinish"
-        @finishFailed="onFinishFailed"
-      >
-        <div class="login-title-container">
-          <h1 class="login-title">{{ isLogin ? 'Вход' : 'Регистрация' }}</h1>
-        </div>
-
-        <a-form-item
-          label="Имя пользователя"
-          name="username"
-          :rules="[{ required: true, message: 'Пожалуйста, введите имя пользователя!' }]"
-        >
-          <a-input v-model:value="formState.username">
-            <template #prefix>
-              <user-outlined class="site-form-item-icon" />
-            </template>
-          </a-input>
-        </a-form-item>
-
-        <template v-if="!isLogin">
-          <a-form-item
-            label="Имя"
-            name="first_name"
-            :rules="[{ required: true, message: 'Пожалуйста, введите имя!' }]"
-          >
-            <a-input v-model:value="formState.first_name" />
-          </a-form-item>
-
-          <a-form-item
-            label="Фамилия"
-            name="last_name"
-            :rules="[{ required: true, message: 'Пожалуйста, введите фамилию!' }]"
-          >
-            <a-input v-model:value="formState.last_name" />
-          </a-form-item>
-
-          <a-form-item
-            label="Отчество"
-            name="middle_name"
-            :rules="[{ required: true, message: 'Пожалуйста, введите отчество!' }]"
-          >
-            <a-input v-model:value="formState.middle_name" />
-          </a-form-item>
-
-          <a-form-item
-            label="Телефон"
-            name="phone"
-            :rules="[{ required: true, message: 'Пожалуйста, введите телефон!' }]"
-          >
-            <a-input v-model:value="formState.phone" />
-          </a-form-item>
-
-          <a-form-item
-            label="Email"
-            name="email"
-            :rules="[
-              { required: true, message: 'Пожалуйста, введите email!' },
-              { type: 'email', message: 'Пожалуйста, введите корректный email!' }
-            ]"
-          >
-            <a-input v-model:value="formState.email" />
-          </a-form-item>
-
-          <a-form-item
-            label="Дата рождения"
-            name="birth_date"
-            :rules="[{ required: true, message: 'Пожалуйста, введите дату рождения!' }]"
-          >
-            <a-date-picker v-model:value="formState.birth_date" format="YYYY-MM-DD" />
-          </a-form-item>
-        </template>
-
-        <a-form-item
-          label="Пароль"
-          name="password"
-          :rules="[{ required: true, message: 'Пожалуйста, введите пароль!' }]"
-        >
-          <a-input-password v-model:value="formState.password">
-            <template #prefix>
-              <lock-outlined class="site-form-item-icon" />
-            </template>
-          </a-input-password>
-        </a-form-item>
-
-        <a-form-item>
-          <a-button
-            :disabled="disabled"
-            type="primary"
-            html-type="submit"
-            class="login-form-button"
-          >
-            {{ isLogin ? 'Войти' : 'Зарегистрироваться' }}
-          </a-button>
-          <div class="mt-4 text-center">
-            <a @click="toggleMode" class="toggle-link">
-              {{ isLogin ? 'Зарегистрироваться!' : 'Вернуться ко входу' }}
-            </a>
-          </div>
-        </a-form-item>
-      </a-form>
-    </div>
-  </div>
-</template>
-
 <script setup>
 import { reactive, computed, ref } from 'vue'
 import { UserOutlined, LockOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
+import { useLanguageStore } from '@/language' // Импортируем useLanguageStore
 
 const router = useRouter()
 const isLogin = ref(true)
+
+// Получаем хранилище языка
+const languageStore = useLanguageStore()
+
+// Реактивный метод для получения переводов
+const $t = computed(() => (key) => {
+  const translation = languageStore.translations[key] || key
+  console.log(`Translating key "${key}":`, translation) // Логирование для отладки
+  return translation
+})
 
 const formState = reactive({
   username: '',
@@ -133,47 +33,190 @@ const formState = reactive({
 const toggleMode = () => {
   isLogin.value = !isLogin.value
   Object.keys(formState).forEach((key) => {
-    formState[key] = ''
+    formState[key] = key === 'birth_date' ? null : ''
   })
 }
 
 const onFinish = async (values) => {
   try {
     const endpoint = isLogin.value ? '/api/login' : '/api/register'
-    const response = await axios.post(`http://localhost:5000${endpoint}`, {
-      ...values,
-      birth_date: values.birth_date?.format('YYYY-MM-DD')
-    })
+    const payload = {
+      username: formState.username,
+      password: formState.password,
+      email: formState.email,
+      firstName: formState.first_name,
+      lastName: formState.last_name,
+      middleName: formState.middle_name,
+      phone: formState.phone,
+      birthDate: formState.birth_date ? formState.birth_date.format('YYYY-MM-DD') : null
+    }
+
+    const response = await axios.post(`http://localhost:8080${endpoint}`, payload)
 
     if (response.status === 200 || response.status === 201) {
-      localStorage.setItem('isAuthenticated', 'true')
-      localStorage.setItem('userId', response.data.user_id)
+      const userId = response.data.user_id || response.data.user?.id || response.data.id
+      const userData = response.data.user_data || payload
+      const role = response.data.role || 'USER' // Получаем роль из ответа
 
-      if (response.data.user_data) {
-        localStorage.setItem('userData', JSON.stringify(response.data.user_data))
+      if (!userId) {
+        throw new Error($t.value('authorization.error_no_user_id'))
       }
 
-      message.success(isLogin.value ? 'Вход выполнен успешно!' : 'Регистрация успешна!')
-      router.push('/profile')
+      localStorage.setItem('isAuthenticated', 'true')
+      localStorage.setItem('userId', userId)
+      localStorage.setItem('username', userData.username)
+      localStorage.setItem('email', userData.email)
+      localStorage.setItem('userData', JSON.stringify(userData))
+      localStorage.setItem('role', role) // Сохраняем роль
+
+      message.success(
+        isLogin.value
+          ? $t.value('authorization.login_success')
+          : $t.value('authorization.register_success')
+      )
+
+      // Перенаправление в зависимости от роли
+      if (role === 'ADMIN') {
+        router.push('/admin')
+      } else {
+        router.push('/')
+      }
     }
   } catch (error) {
-    const errorMessage = error.response?.data?.error || 'Произошла ошибка'
+    const errorMessage = error.response?.data?.error || $t.value('authorization.error_default')
     message.error(errorMessage)
+    console.error($t.value('authorization.error_auth'), error)
   }
 }
 
 const onFinishFailed = (errorInfo) => {
   console.log('Failed:', errorInfo)
-  message.error('Пожалуйста, проверьте введенные данные!')
+  message.error($t.value('authorization.error_form_validation'))
 }
 
 const disabled = computed(() => {
   if (isLogin.value) {
     return !(formState.username && formState.password)
   }
-  return Object.keys(formState).some((key) => !formState[key])
+  return (
+    Object.keys(formState).some((key) => !formState[key] && key !== 'birth_date') ||
+    !formState.birth_date
+  )
 })
 </script>
+
+<template>
+  <div class="login-container">
+    <div class="login-card">
+      <a-form
+        :model="formState"
+        name="normal_login"
+        class="login-form"
+        @finish="onFinish"
+        @finishFailed="onFinishFailed"
+      >
+        <div class="login-title-container">
+          <h1 class="login-title">
+            {{ isLogin ? $t('authorization.login_title') : $t('authorization.register_title') }}
+          </h1>
+        </div>
+
+        <a-form-item
+          :label="$t('authorization.username_label')"
+          name="username"
+          :rules="[{ required: true, message: $t('authorization.username_required') }]"
+        >
+          <a-input v-model:value="formState.username">
+            <template #prefix>
+              <user-outlined class="site-form-item-icon" />
+            </template>
+          </a-input>
+        </a-form-item>
+
+        <template v-if="!isLogin">
+          <a-form-item
+            :label="$t('authorization.first_name_label')"
+            name="first_name"
+            :rules="[{ required: true, message: $t('authorization.first_name_required') }]"
+          >
+            <a-input v-model:value="formState.first_name" />
+          </a-form-item>
+
+          <a-form-item
+            :label="$t('authorization.last_name_label')"
+            name="last_name"
+            :rules="[{ required: true, message: $t('authorization.last_name_required') }]"
+          >
+            <a-input v-model:value="formState.last_name" />
+          </a-form-item>
+
+          <a-form-item
+            :label="$t('authorization.middle_name_label')"
+            name="middle_name"
+            :rules="[{ required: true, message: $t('authorization.middle_name_required') }]"
+          >
+            <a-input v-model:value="formState.middle_name" />
+          </a-form-item>
+
+          <a-form-item
+            :label="$t('authorization.phone_label')"
+            name="phone"
+            :rules="[{ required: true, message: $t('authorization.phone_required') }]"
+          >
+            <a-input v-model:value="formState.phone" />
+          </a-form-item>
+
+          <a-form-item
+            :label="$t('authorization.email_label')"
+            name="email"
+            :rules="[
+              { required: true, message: $t('authorization.email_required') },
+              { type: 'email', message: $t('authorization.email_invalid') }
+            ]"
+          >
+            <a-input v-model:value="formState.email" />
+          </a-form-item>
+
+          <a-form-item
+            :label="$t('authorization.birth_date_label')"
+            name="birth_date"
+            :rules="[{ required: true, message: $t('authorization.birth_date_required') }]"
+          >
+            <a-date-picker v-model:value="formState.birth_date" format="YYYY-MM-DD" />
+          </a-form-item>
+        </template>
+
+        <a-form-item
+          :label="$t('authorization.password_label')"
+          name="password"
+          :rules="[{ required: true, message: $t('authorization.password_required') }]"
+        >
+          <a-input-password v-model:value="formState.password">
+            <template #prefix>
+              <lock-outlined class="site-form-item-icon" />
+            </template>
+          </a-input-password>
+        </a-form-item>
+
+        <a-form-item>
+          <a-button
+            :disabled="disabled"
+            type="primary"
+            html-type="submit"
+            class="login-form-button"
+          >
+            {{ isLogin ? $t('authorization.login_button') : $t('authorization.register_button') }}
+          </a-button>
+          <div class="mt-4 text-center">
+            <a @click="toggleMode" class="toggle-link">
+              {{ isLogin ? $t('authorization.to_register') : $t('authorization.to_login') }}
+            </a>
+          </div>
+        </a-form-item>
+      </a-form>
+    </div>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 $gradient-from: #6e8efb;

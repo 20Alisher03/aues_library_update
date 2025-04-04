@@ -1,5 +1,6 @@
 <script setup>
-import { reactive, toRaw } from 'vue'
+import { reactive, toRaw, computed } from 'vue'
+import { useLanguageStore } from '@/language' // Импортируем useLanguageStore
 
 const emit = defineEmits(['close', 'apply-filters'])
 
@@ -15,29 +16,48 @@ const localFilters = reactive({
   ...toRaw(props.initialFilters)
 })
 
-const ratingDescriptions = [
-  'Terrible (1★)',
-  'Bad (2★)',
-  'Normal (3★)',
-  'Good (4★)',
-  'Wonderful (5★)'
-]
+// Получаем хранилище языка
+const languageStore = useLanguageStore()
 
-const genres = [
-  'Научная',
-  'Фантастика',
-  'Социальная',
-  'Для детей',
-  'Спортивный',
-  'Бизнес',
-  'Драма',
-  'Детектив',
-  'Ужасы',
-  'Историческая',
-  'Художественная литература'
-]
-const languages = ['русский', 'английский', 'китайский', 'казахский']
-const ages = ['Для детей', 'Для подростков', 'Для взрослых', 'Для пожилых']
+// Реактивный метод для получения переводов
+const $t = computed(() => (key) => {
+  const translation = languageStore.translations[key] || key
+  console.log(`Translating key "${key}":`, translation) // Логирование для отладки
+  return translation
+})
+
+// Переводим статические данные
+const ratingDescriptions = computed(() => [
+  $t.value('filters.rating.poor'),
+  $t.value('filters.rating.not_good'),
+  $t.value('filters.rating.average'),
+  $t.value('filters.rating.good'),
+  $t.value('filters.rating.excellent')
+])
+
+const genres = computed(() => [
+  $t.value('filters.genre.programming'),
+  $t.value('filters.genre.physics'),
+  $t.value('filters.genre.ai'),
+  $t.value('filters.genre.math'),
+  $t.value('filters.genre.systems'),
+  $t.value('filters.genre.system_programming'),
+  $t.value('filters.genre.computer_science'),
+  $t.value('filters.genre.networks'),
+  $t.value('filters.genre.automation'),
+  $t.value('filters.genre.engineering'),
+  $t.value('filters.genre.architecture')
+])
+
+const languages = computed(() => [
+  $t.value('filters.language.russian'),
+  $t.value('filters.language.english'),
+  $t.value('filters.language.french'),
+  $t.value('filters.language.spanish'),
+  $t.value('filters.language.portuguese')
+])
+
+const ages = computed(() => [$t.value('filters.age.12_plus'), $t.value('filters.age.14_plus')])
 
 const toggleGenre = (genre) => {
   if (localFilters.selectedGenres.includes(genre)) {
@@ -77,7 +97,7 @@ const applyFilters = () => {
   <div class="filters-overlay" @click="emit('close')">
     <div class="filters-panel" @click.stop>
       <div class="filters-header">
-        <h2 class="text-2xl font-bold">Фильтры</h2>
+        <h2 class="text-2xl font-bold">{{ $t('filters.title') }}</h2>
         <button @click="emit('close')" class="close-button">
           <img src="/close.svg" alt="close" class="w-6 h-6" />
         </button>
@@ -85,7 +105,7 @@ const applyFilters = () => {
 
       <div class="filters-content">
         <div class="filter-section">
-          <h3 class="text-lg font-semibold mb-2">Фильтрация по жанру:</h3>
+          <h3 class="text-lg font-semibold mb-2">{{ $t('filters.genre_filter') }}</h3>
           <div class="flex gap-4 flex-wrap">
             <label v-for="genre in genres" :key="genre" class="filter-checkbox">
               <input
@@ -100,7 +120,7 @@ const applyFilters = () => {
         </div>
 
         <div class="filter-section">
-          <h3 class="text-lg font-semibold mb-2">Фильтрация по языку:</h3>
+          <h3 class="text-lg font-semibold mb-2">{{ $t('filters.language_filter') }}</h3>
           <div class="flex gap-4 flex-wrap">
             <label v-for="language in languages" :key="language" class="filter-checkbox">
               <input
@@ -115,7 +135,7 @@ const applyFilters = () => {
         </div>
 
         <div class="filter-section">
-          <h3 class="text-lg font-semibold mb-2">Фильтрация по возрасту:</h3>
+          <h3 class="text-lg font-semibold mb-2">{{ $t('filters.age_filter') }}</h3>
           <div class="flex gap-4 flex-wrap">
             <label v-for="age in ages" :key="age" class="filter-checkbox">
               <input
@@ -130,7 +150,7 @@ const applyFilters = () => {
         </div>
 
         <div class="filter-section">
-          <h3 class="text-lg font-semibold mb-2">Фильтрация по рейтингу:</h3>
+          <h3 class="text-lg font-semibold mb-2">{{ $t('filters.rating_filter') }}</h3>
           <div class="flex items-center gap-2">
             <a-rate
               v-model:value="localFilters.selectedRating"
@@ -149,34 +169,14 @@ const applyFilters = () => {
           @click="applyFilters"
           class="w-full bg-blue-500 text-white py-3 px-6 rounded-lg hover:bg-blue-600 transition"
         >
-          Применить фильтры
+          {{ $t('filters.apply_filters') }}
         </button>
       </div>
     </div>
   </div>
 </template>
 
-<style lang="scss" scoped>
-// Variables for breakpoints
-$breakpoints: (
-  '2xl': 2560px,
-  'xl': 1440px,
-  'lg': 1024px,
-  'md': 768px,
-  'sm': 425px,
-  'xs': 375px,
-  'xxs': 320px
-);
-
-// Mixin for media queries
-@mixin respond-to($breakpoint) {
-  @if map-has-key($breakpoints, $breakpoint) {
-    @media screen and (max-width: map-get($breakpoints, $breakpoint)) {
-      @content;
-    }
-  }
-}
-
+<style scoped>
 .filters-overlay {
   position: fixed;
   top: 0;
@@ -199,24 +199,6 @@ $breakpoints: (
   flex-direction: column;
   box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
   animation: slideIn 0.3s ease-out forwards;
-
-  @include respond-to('xl') {
-    width: 360px;
-  }
-
-  @include respond-to('lg') {
-    width: 320px;
-  }
-
-  @include respond-to('md') {
-    width: 100%;
-    max-width: 400px;
-  }
-
-  @include respond-to('sm') {
-    width: 100%;
-    max-width: none;
-  }
 }
 
 .filters-header {
@@ -225,45 +207,26 @@ $breakpoints: (
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
 
-  @include respond-to('sm') {
-    padding: 1rem;
-  }
+.close-button {
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  transition: background-color 0.2s;
+}
 
-  h2 {
-    @include respond-to('sm') {
-      font-size: 1.5rem;
-    }
-
-    @include respond-to('xxs') {
-      font-size: 1.25rem;
-    }
-  }
+.close-button:hover {
+  background-color: #f3f4f6;
 }
 
 .filters-content {
   flex: 1;
   overflow-y: auto;
   padding: 1.5rem;
-
-  @include respond-to('sm') {
-    padding: 1rem;
-  }
 }
 
 .filter-section {
   margin-bottom: 2rem;
-
-  @include respond-to('sm') {
-    margin-bottom: 1.5rem;
-  }
-
-  h3 {
-    @include respond-to('sm') {
-      font-size: 1rem;
-      margin-bottom: 0.5rem;
-    }
-  }
 }
 
 .filter-checkbox {
@@ -274,34 +237,17 @@ $breakpoints: (
   border-radius: 0.375rem;
   transition: background-color 0.2s;
   cursor: pointer;
+}
 
-  @include respond-to('sm') {
-    font-size: 0.875rem;
-    padding: 0.375rem;
-  }
-
-  @include respond-to('xxs') {
-    font-size: 0.813rem;
-  }
+.filter-checkbox:hover {
+  background-color: #f3f4f6;
 }
 
 .filters-footer {
   padding: 1.5rem;
   border-top: 1px solid #e5e7eb;
-
-  @include respond-to('sm') {
-    padding: 1rem;
-  }
-
-  button {
-    @include respond-to('sm') {
-      padding: 0.75rem 1rem;
-      font-size: 0.875rem;
-    }
-  }
 }
 
-// Animation keyframes
 @keyframes slideIn {
   from {
     transform: translateX(100%);
